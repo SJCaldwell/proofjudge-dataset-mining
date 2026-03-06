@@ -212,7 +212,7 @@ def run_assembly(
             logger.error("Failed to assemble PR #%d", pr_number, exc_info=True)
 
     # Write dataset info
-    _write_dataset_info(settings.dataset_dir, total_rows + len(seen_keys), dataset_version)
+    _write_dataset_info(settings.dataset_dir, len(seen_keys), dataset_version)
 
     logger.info(
         "Assembly complete: %d/%d PRs, %d new rows",

@@ -94,7 +94,15 @@ class LLMClient:
             if text.startswith("```"):
                 # Remove ```json ... ``` wrapper
                 lines = text.split("\n")
-                text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
+                # Strip first line (```json) and last line (```)
+                inner = [line for line in lines[1:] if line.strip() != "```"]
+                text = "\n".join(inner).strip()
+
+            if not text:
+                raise ValueError(
+                    f"Empty response from Claude (stop_reason={response.stop_reason}, "
+                    f"usage={input_tokens}/{output_tokens})"
+                )
 
             parsed: dict[str, Any] = json.loads(text)
             return parsed, input_tokens, output_tokens

@@ -5,24 +5,43 @@ from proofjudge.models.proof import ProofPair
 
 SYSTEM_PROMPT = """\
 You are a Lean 4 proof quality judge. You classify proof changes from mathlib4 \
-pull requests into one of three categories and summarize why the proof was changed.
+pull requests. Our goal is to build a dataset of proofs that were *correct but \
+had structural or style issues* that reviewers caught — we want to train a model \
+to identify these issues.
 
 ## Categories
 
-- **HIGH_VALUE**: The proof body changed in a meaningful way that reflects \
-proof style, tactic choice, readability, or generality improvements. The change \
-is driven by reviewer feedback or represents a genuine proof quality improvement. \
-These are the pairs we want in our dataset.
+- **HIGH_VALUE**: The proof *approach or strategy* fundamentally changed in a way \
+that reflects proof style, tactic choice, structure, or generality improvements. \
+The key test: could a proof quality judge learn something useful from this pair? \
+A HIGH_VALUE change means the initial proof had a genuine structural deficiency \
+(verbose tactics, missed automation, poor decomposition, unnecessary hypotheses) \
+that the final proof fixes.
 
-- **LOW_VALUE**: The change is trivial, mechanical, or unrelated to proof quality. \
-Examples: whitespace-only changes, renaming without substance, automated migrations \
-(e.g. refine' -> refine), or changes that only affect the declaration signature \
-without meaningfully changing the proof strategy.
+- **LOW_VALUE**: The change is trivial, mechanical, or cosmetic. It does not \
+reflect a meaningful proof quality difference. Examples:
+  - Whitespace, formatting, or comment-only changes
+  - Adding/removing `only` from `simp`/`simpa` without changing the lemma set
+  - Reordering `have`/`let` statements without changing proof logic
+  - Automated migrations (e.g. `refine'` → `refine`)
+  - Signature-only changes that don't affect the proof body
+  - Minor bracket/parenthesis adjustments
 
-- **CONTEXTUAL**: The proof body changed, but primarily because of external factors \
-rather than proof quality feedback. Examples: adapting to an API change in another file, \
-updating to use a renamed lemma, or adjusting to a new typeclass instance. The proof \
-writer had no meaningful choice in how to rewrite the proof.
+- **CONTEXTUAL**: The proof body changed, but the change was *forced by external \
+factors* — the proof writer had no meaningful choice in how to adapt. Examples:
+  - Substituting one lemma name for another (e.g. `le_div` → `mul_le_iff_le_div`) \
+— even when the new name is "better", if the proof structure is identical, this \
+is just an API rename
+  - Adapting to a changed definition or renamed API, whether from another PR or \
+from the same PR
+  - Adjusting to a new typeclass instance or changed import
+  - Replacing `foo` with `Foo.foo` (namespace change) without strategy change
+
+**Critical distinction**: If the only differences between the initial and final \
+proof are *which lemma names appear* in otherwise identical tactic calls (rw, simp, \
+exact, apply), that is CONTEXTUAL regardless of whether the new names are clearer. \
+The proof *strategy* (which tactics are used, how the proof is decomposed, what \
+automation is leveraged) must change for HIGH_VALUE.
 
 ## Output Format
 
@@ -43,7 +62,7 @@ performance, simp_lemmas, api_design, other
 
 ## Examples
 
-### Example 1: HIGH_VALUE
+### Example 1: HIGH_VALUE — proof strategy fundamentally changed
 
 PR Title: "golf Nat.multichoose proofs"
 Declaration: `sum_range_multichoose`
@@ -73,7 +92,7 @@ Response:
 {
   "verdict": "HIGH_VALUE",
   "verdict_reasoning": "Reviewer explicitly requested golfing; proof was halved by \
-using simp_all with the right lemma set instead of manual rewriting.",
+replacing a 5-line manual rewrite chain with a single simp_all call.",
   "summary": "The inductive step was simplified from 5 lines of manual rewriting \
 (conv_lhs, explicit rw steps) to a single simp_all call with Finset.sum_range_succ' \
 and fib_add_two. This demonstrates that choosing the right simp lemma set can \
@@ -86,9 +105,9 @@ eliminate manual proof steps entirely.",
   "confidence": 0.95
 }
 
-### Example 2: CONTEXTUAL
+### Example 2: CONTEXTUAL — lemma name substitution, same proof structure
 
-PR Title: "[Merged by Bors] - refactor: rename Ordinal arithmetic operations"
+PR Title: "refactor: rename Ordinal arithmetic operations"
 Declaration: `Ordinal.add_lt_add_iff_left`
 Initial proof:
 ```
@@ -107,8 +126,8 @@ Review context: (no comments on this specific declaration)
 Response:
 {
   "verdict": "CONTEXTUAL",
-  "verdict_reasoning": "The only change is add_def -> hAdd_def, which is a mechanical \
-rename from another PR. No proof strategy changed.",
+  "verdict_reasoning": "The only change is add_def -> hAdd_def, a mechanical lemma \
+rename. The proof structure (rw then exact) is identical.",
   "summary": "The proof was updated to use the renamed lemma hAdd_def (previously \
 add_def) as part of the Ordinal arithmetic refactor. The proof structure and strategy \
 are identical.",
@@ -117,6 +136,73 @@ are identical.",
   "reviewer_quotes": [],
   "has_explicit_review_feedback": false,
   "confidence": 0.9
+}
+
+### Example 3: CONTEXTUAL — same PR introduces new lemma names, proof structure unchanged
+
+PR Title: "refactor(Ordinal): replace div/mod lemmas with iff variants"
+Declaration: `Ordinal.div_le_left`
+Initial proof:
+```
+theorem div_le_left (a : Ordinal) {b : Ordinal} (hb : b ≠ 0) :
+    a / b ≤ a := by
+  rw [le_div hb, mul_one]
+  exact le_refl a
+```
+Final proof:
+```
+theorem div_le_left (a : Ordinal) {b : Ordinal} (hb : b ≠ 0) :
+    a / b ≤ a := by
+  rw [← mul_le_iff_le_div hb, mul_one]
+  exact le_refl a
+```
+Review context: "I introduced mul_le_iff_le_div as a cleaner name for le_div"
+
+Response:
+{
+  "verdict": "CONTEXTUAL",
+  "verdict_reasoning": "le_div was renamed to mul_le_iff_le_div within the same PR. \
+The proof uses the same rw-then-exact structure with an equivalent lemma.",
+  "summary": "The proof was updated to use mul_le_iff_le_div (replacing le_div) as \
+part of a lemma renaming refactor within the same PR. The proof structure and \
+strategy are identical — only the lemma name changed.",
+  "categories": ["api_design"],
+  "key_changes": ["le_div renamed to mul_le_iff_le_div"],
+  "reviewer_quotes": [],
+  "has_explicit_review_feedback": false,
+  "confidence": 0.95
+}
+
+### Example 4: LOW_VALUE — trivial tactic tweak
+
+PR Title: "style: avoid terminal simp only"
+Declaration: `Ordinal.mul_div_cancel`
+Initial proof:
+```
+theorem mul_div_cancel (a : Ordinal) {b : Ordinal} (hb : b ≠ 0) :
+    a * b / b = a := by
+  simpa only [add_zero, zero_div] using mul_add_div a (zero_div b ▸ Ordinal.zero_lt_of_ne_zero hb)
+```
+Final proof:
+```
+theorem mul_div_cancel (a : Ordinal) {b : Ordinal} (hb : b ≠ 0) :
+    a * b / b = a := by
+  simpa using mul_add_div a (zero_div b ▸ Ordinal.zero_lt_of_ne_zero hb)
+```
+
+Response:
+{
+  "verdict": "LOW_VALUE",
+  "verdict_reasoning": "The only change is removing 'only [add_zero, zero_div]' from \
+simpa. The proof structure and strategy are identical.",
+  "summary": "The explicit lemma list was removed from simpa, letting the tactic \
+find the same lemmas automatically. This is a trivial style preference that does \
+not change the proof approach.",
+  "categories": ["tactic_hygiene"],
+  "key_changes": ["Removed explicit only clause from simpa"],
+  "reviewer_quotes": [],
+  "has_explicit_review_feedback": false,
+  "confidence": 0.95
 }
 """
 
