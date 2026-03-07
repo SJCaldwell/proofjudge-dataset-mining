@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 
 import anthropic
@@ -89,20 +90,69 @@ class LLMClient:
             input_tokens = response.usage.input_tokens
             output_tokens = response.usage.output_tokens
 
-            # Parse JSON (strip markdown fences if present)
-            text = text.strip()
-            if text.startswith("```"):
-                # Remove ```json ... ``` wrapper
-                lines = text.split("\n")
-                # Strip first line (```json) and last line (```)
-                inner = [line for line in lines[1:] if line.strip() != "```"]
-                text = "\n".join(inner).strip()
-
-            if not text:
+            # Extract JSON from response text
+            parsed = _extract_json(text)
+            if parsed is None:
                 raise ValueError(
-                    f"Empty response from Claude (stop_reason={response.stop_reason}, "
-                    f"usage={input_tokens}/{output_tokens})"
+                    f"No valid JSON in Claude response "
+                    f"(stop_reason={response.stop_reason}, "
+                    f"text={text[:200]!r})"
                 )
-
-            parsed: dict[str, Any] = json.loads(text)
             return parsed, input_tokens, output_tokens
+
+
+def _extract_json(text: str) -> dict[str, Any] | None:
+    """Extract a JSON object from LLM response text.
+
+    Handles: raw JSON, markdown fences, text before/after JSON.
+    """
+    text = text.strip()
+    if not text:
+        return None
+
+    # Strip markdown fences if present
+    if text.startswith("```"):
+        lines = text.split("\n")
+        inner = [line for line in lines[1:] if line.strip() != "```"]
+        text = "\n".join(inner).strip()
+
+    # Try direct parse first
+    try:
+        result: dict[str, Any] = json.loads(text)
+        return result
+    except json.JSONDecodeError:
+        pass
+
+    # Find JSON object within surrounding text
+    match = re.search(r"\{", text)
+    if match:
+        # Find the matching closing brace by counting depth
+        start = match.start()
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            c = text[i]
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                escape = True
+                continue
+            if c == '"' and not escape:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        result = json.loads(text[start : i + 1])
+                        return result
+                    except json.JSONDecodeError:
+                        break
+
+    return None

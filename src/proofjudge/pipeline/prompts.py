@@ -9,39 +9,60 @@ pull requests. Our goal is to build a dataset of proofs that were *correct but \
 had structural or style issues* that reviewers caught — we want to train a model \
 to identify these issues.
 
+## The Judge Test
+
+For each pair, ask: **if a proof quality judge saw ONLY the initial proof (not \
+the final), could it identify a concrete structural deficiency?** If yes, the \
+pair is HIGH_VALUE. If the initial proof is already reasonable and the change was \
+forced by external factors or is just cosmetic, it is not HIGH_VALUE.
+
 ## Categories
 
 - **HIGH_VALUE**: The proof *approach or strategy* fundamentally changed in a way \
 that reflects proof style, tactic choice, structure, or generality improvements. \
-The key test: could a proof quality judge learn something useful from this pair? \
 A HIGH_VALUE change means the initial proof had a genuine structural deficiency \
 (verbose tactics, missed automation, poor decomposition, unnecessary hypotheses) \
-that the final proof fixes.
+that the final proof fixes. The final proof must be *strictly better as a proof* \
+— not just adapted to new APIs.
 
 - **LOW_VALUE**: The change is trivial, mechanical, or cosmetic. It does not \
 reflect a meaningful proof quality difference. Examples:
   - Whitespace, formatting, or comment-only changes
-  - Adding/removing `only` from `simp`/`simpa` without changing the lemma set
+  - Adding/removing `only` from `simp`/`simpa` without changing the overall \
+tactic approach (e.g. `simpa only [foo, bar]` → `simpa` is LOW_VALUE)
+  - `simp only [a, b, c]` → `simp [a, b, c]` or vice versa
   - Reordering `have`/`let` statements without changing proof logic
   - Automated migrations (e.g. `refine'` → `refine`)
   - Signature-only changes that don't affect the proof body
   - Minor bracket/parenthesis adjustments
+  - Using constructor notation `⟨...⟩` vs explicit constructor name (stylistic)
 
 - **CONTEXTUAL**: The proof body changed, but the change was *forced by external \
 factors* — the proof writer had no meaningful choice in how to adapt. Examples:
   - Substituting one lemma name for another (e.g. `le_div` → `mul_le_iff_le_div`) \
 — even when the new name is "better", if the proof structure is identical, this \
 is just an API rename
+  - A proof becoming `rfl` because a *definition* was changed (not because the \
+proof was improved — the definitions were refactored elsewhere)
   - Adapting to a changed definition or renamed API, whether from another PR or \
 from the same PR
   - Adjusting to a new typeclass instance or changed import
   - Replacing `foo` with `Foo.foo` (namespace change) without strategy change
+  - The declaration's *signature changed* (e.g. statement was reversed, arguments \
+reordered) and the proof necessarily adapted — even if the new proof looks \
+different, the change was forced by the new statement, not by proof quality
 
-**Critical distinction**: If the only differences between the initial and final \
+**Critical distinction 1**: If the only differences between the initial and final \
 proof are *which lemma names appear* in otherwise identical tactic calls (rw, simp, \
 exact, apply), that is CONTEXTUAL regardless of whether the new names are clearer. \
 The proof *strategy* (which tactics are used, how the proof is decomposed, what \
 automation is leveraged) must change for HIGH_VALUE.
+
+**Critical distinction 2**: If `Signature changed: True` in the input, be \
+especially skeptical of HIGH_VALUE. When the theorem statement itself changed, \
+proof changes are often forced adaptations rather than quality improvements. Only \
+classify as HIGH_VALUE if the proof strategy genuinely improved *beyond* what the \
+signature change required.
 
 ## Output Format
 
@@ -200,6 +221,41 @@ find the same lemmas automatically. This is a trivial style preference that does
 not change the proof approach.",
   "categories": ["tactic_hygiene"],
   "key_changes": ["Removed explicit only clause from simpa"],
+  "reviewer_quotes": [],
+  "has_explicit_review_feedback": false,
+  "confidence": 0.95
+}
+
+### Example 5: CONTEXTUAL — definition refactor makes proof become rfl
+
+PR Title: "refactor(AlgebraicGeometry): streamline Spec construction"
+Declaration: `Spec.topMap_comp`
+Signature changed: False
+Initial proof:
+```
+theorem Spec.topMap_comp {R S T : CommRingCat} (f : R ⟶ S) (g : S ⟶ T) :
+    Spec.topMap (f ≫ g) = Spec.topMap g ≫ Spec.topMap f :=
+  PrimeSpectrum.comap_comp _ _
+```
+Final proof:
+```
+theorem Spec.topMap_comp {R S T : CommRingCat} (f : R ⟶ S) (g : S ⟶ T) :
+    Spec.topMap (f ≫ g) = Spec.topMap g ≫ Spec.topMap f :=
+  rfl
+```
+Review context: "after the refactor, these are now definitionally equal"
+
+Response:
+{
+  "verdict": "CONTEXTUAL",
+  "verdict_reasoning": "The proof became rfl because the underlying definitions were \
+refactored (not because the proof strategy was improved). The initial proof using \
+PrimeSpectrum.comap_comp was already clean and direct.",
+  "summary": "After refactoring the Spec construction, this equality became \
+definitionally true (rfl), eliminating the need for PrimeSpectrum.comap_comp. The \
+proof change was driven by the definition refactor, not by a proof quality issue.",
+  "categories": ["api_design"],
+  "key_changes": ["Proof became rfl after definition refactor"],
   "reviewer_quotes": [],
   "has_explicit_review_feedback": false,
   "confidence": 0.95
