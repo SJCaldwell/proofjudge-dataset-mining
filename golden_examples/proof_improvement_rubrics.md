@@ -44,33 +44,47 @@ entire branches of case analysis.
   `Unique E`, collapsing the proof via `Subsingleton.elim`
 
 ## 4. Automation Over Manual Proof Steps (Golfing)
-**Instances seen: 2**
+**Instances seen: 5**
 
-The initial proof manually sequences rewrite steps that `simp`/`simp_all`/`omega`
-can find automatically with the right lemma hints.
+The initial proof manually sequences rewrite steps that `simp`/`simp_all`/`omega`/
+`grind` can find automatically with the right lemma hints.
 
 - **sum_range_multichoose** (PR #33656): 10→5 lines, manual `conv_lhs`/`rw` chain
   replaced by `simp_all [Finset.sum_range_succ', fib_add_two]`
 - **isEdgeReachable_one** (PR #32870): 11→2 lines, manual constructor replaced
   by `simp` with right lemmas
+- **range_ite_subset'** (PR #27287): Manual `by_cases` + `if_pos`/`if_neg` rewrites
+  + explicit subset lemmas → single `grind` call
+- **card_sdiff_add_card_eq_card** (PR #29427): Manual `Nat.sub_eq_iff_eq_add` chain
+  with `.mp`/`.symm` → single `grind` call
+- **append_assoc** (PR #30960): Manual induction with explicit `cons_append` rewrites
+  → `induction p <;> simp [*]`
 
 ## 5. Term Mode Over Unnecessary Tactic Mode
-**Instances seen: 1**
+**Instances seen: 2**
 
 When the proof is a direct application or composition, tactic mode
 (`by apply/exact`) adds unnecessary overhead.
 
 - **cellFrontier_subset_complex** (PR #20287): `apply subset_trans` →
   `.trans` dot notation (3→3 lines, but cleaner)
+- **condIndepFun_self_left** (PR #29554): Tactic-mode `refine` + `rw` → direct
+  term-mode application with `comap_measurable Z`
 
 ## 6. Choosing Better Tactic Variants
-**Instances seen: 1**
+**Instances seen: 4**
 
 Using a more appropriate tactic variant that handles the goal more directly.
 
 - **measure_eq_measure_preimage** (PR #7795): Manual `eq_or_lt_of_le` case
   analysis replaced by `inter_distrib_left`, `preimage_union` set operations
   (50→44 lines)
+- **sigmoid_mul_rexp_neg** (PR #30653): `field_simp` + `ring` → single `field`
+  tactic (4→3 lines)
+- **zeta_limit_aux1** (PR #30653): `field_simp [...]; ring_nf` → single `field`
+  tactic
+- **exists_lub_Iio** (PR #30073): `by_cases` + `by_contra` + `push_neg` chain →
+  `by_cases!` which handles negation automatically
 
 ## 7. Recognizing Definitional Equality
 **Instances seen: 1**
@@ -131,6 +145,32 @@ These patterns were incorrectly classified as HIGH_VALUE:
 
 ---
 
+## 12. Extracting Helper Lemmas for Decomposition
+**Instances seen: 3**
+
+A long proof with inline `have` statements or repeated reasoning should be
+decomposed into helper lemmas, making both the main theorem and intermediates
+reusable and readable.
+
+- **integral_log** (PR #20682): 44-line inline case analysis → 5-line proof
+  using extracted `integral_log_from_zero` helpers. Reviewer: "Can you extract
+  this `have` into its own lemma?"
+- **intervalIntegrable_of_even** (PR #20682): Inline `have` for 0-based
+  integrability → extracted `intervalIntegrable_of_even₀` helper
+- **logMahlerMeasure_X_sub_C** (PR #30548): 73→36 lines by extracting
+  `divisor_sub_const_self` and `divisor_sub_const_of_ne` lemmas
+
+## 13. Unnecessary Hypothesis Removal
+**Instances seen: 2**
+
+The theorem statement carries a hypothesis that isn't actually needed,
+which a judge should recognize as a generality improvement.
+
+- **Tape.write_mk'** (PR #30821): Removed unnecessary parameter `a` from
+  theorem statement, making it more broadly applicable
+- **zpow_neg** (PR #28090): Removed `x_ne_zero` and `x_ne_top` hypotheses
+  by handling edge cases directly in the proof (1→8 lines, but unconditional)
+
 ## 11. Wrong Tactic for the Job
 **Instances seen: 1**
 
@@ -143,22 +183,35 @@ there are no numerical computations, `decide` on large types).
 
 ---
 
-## Aggregate Statistics (v3 prompt, ~890/1904 PRs)
+## Aggregate Statistics (v3 prompt, FINAL — 1904/1904 PRs)
 
-- **Total HIGH_VALUE pairs: ~1,893**
-- Signature changed: 27% (main false positive source)
-- Shrinking proofs: 64%
-- Same size: 23%
-- Growing proofs: 13%
-- Pair failure rate: 2.1% (116 failures)
+- **Total pairs classified: 10,676**
+- **HIGH_VALUE: 4,215 (39.5%)**
+- **LOW_VALUE: 2,975 (27.9%)**
+- **CONTEXTUAL: 3,486 (32.7%)**
+- **Pair failure rate: 0%**
+- With explicit review feedback: 62.4% of HIGH_VALUE
+- Signature changed: 23.4% of dataset rows (982/4196)
 
-If we conservatively filter out signature-changed pairs: ~1,380 HIGH_VALUE.
+**Final dataset: 4,196 rows** from 1,038 PRs across 1,377 unique files.
 
-Estimated final totals (extrapolating to all 1,904 PRs):
-- ~3,500-4,000 HIGH_VALUE pairs
-- ~2,500-3,000 after filtering signature changes
+Category distribution (HIGH_VALUE only):
+- proof_structure: 3,867 (92%)
+- tactic_hygiene: 3,661 (87%)
+- readability: 971 (23%)
+- api_design: 967 (23%)
+- generality: 457 (11%)
+- simp_lemmas: 413 (10%)
+- performance: 114 (3%)
 
-*Last updated: v3 prompt, ~890 PRs processed*
-*Total HIGH_VALUE pairs inspected: ~45*
-*Estimated false positive rate: ~20-25% (down from ~40% in v2)*
-*Main remaining issue: signature-changed pairs (27% of HIGH_VALUE)*
+Proof size changes:
+- Shrinking: 66.7%, Same: 22.6%, Growing: 10.7%
+- Average delta: -3.2 lines
+- Median initial: 6 lines, Median final: 4 lines
+
+Cost: ~$214 (55M input + 3.2M output tokens via Claude Sonnet)
+
+*Last updated: v3 prompt, COMPLETE*
+*Total HIGH_VALUE pairs inspected: ~75*
+*Estimated false positive rate: ~15-20%*
+*Main remaining issue: api_design-tagged pairs without review feedback*
