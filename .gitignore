@@ -1,5 +1,12 @@
 # ProofJudge data directory (runtime output)
 data/
+# But track the final dataset files
+!data/dataset/
+data/dataset/*
+!data/dataset/proofjudge.jsonl
+!data/dataset/proofjudge_eval.jsonl
+!data/dataset/proofjudge_train.jsonl
+!data/dataset/dataset_info.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

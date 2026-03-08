@@ -1,0 +1,8 @@
+{
+  "dataset_name": "proofjudge",
+  "version": "v0.1",
+  "description": "Proof quality improvement triplets mined from mathlib4 PRs. Each row contains an initial proof, a final (improved) proof, and a summary of why the proof was changed.",
+  "total_rows": 4196,
+  "source": "leanprover-community/mathlib4",
+  "generated_at": "2026-03-07T21:51:55.502125+00:00"
+}
