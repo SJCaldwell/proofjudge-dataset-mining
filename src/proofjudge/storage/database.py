@@ -70,6 +70,18 @@ class Database:
     def _init_schema(self) -> None:
         self.conn.executescript(SCHEMA_SQL)
         self.conn.commit()
+        self._migrate_add_contexts_column()
+
+    def _migrate_add_contexts_column(self) -> None:
+        """Add contexts_extracted_at column if it doesn't exist yet."""
+        cursor = self.conn.execute("PRAGMA table_info(pr_status)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "contexts_extracted_at" not in columns:
+            self.conn.execute(
+                "ALTER TABLE pr_status ADD COLUMN contexts_extracted_at TEXT"
+            )
+            self.conn.commit()
+            logger.info("Migrated: added contexts_extracted_at column")
 
     def close(self) -> None:
         self.conn.close()
@@ -197,6 +209,7 @@ class Database:
             "parsed_at",
             "summarized_at",
             "assembled_at",
+            "contexts_extracted_at",
         }
         if phase_column not in allowed_columns:
             msg = f"Invalid phase column: {phase_column}"
@@ -236,6 +249,8 @@ class Database:
                 SUM(CASE WHEN parsed_at IS NOT NULL THEN 1 ELSE 0 END) as parsed,
                 SUM(CASE WHEN summarized_at IS NOT NULL THEN 1 ELSE 0 END) as summarized,
                 SUM(CASE WHEN assembled_at IS NOT NULL THEN 1 ELSE 0 END) as assembled,
+                SUM(CASE WHEN contexts_extracted_at IS NOT NULL
+                    THEN 1 ELSE 0 END) as contexts_extracted,
                 SUM(CASE WHEN error_count >= 3 THEN 1 ELSE 0 END) as failed
             FROM pr_status
             """
@@ -249,7 +264,8 @@ class Database:
             "parsed": int(row[4]),
             "summarized": int(row[5]),
             "assembled": int(row[6]),
-            "failed": int(row[7]),
+            "contexts_extracted": int(row[7]),
+            "failed": int(row[8]),
         }
 
     def get_prs_needing_phase(
@@ -265,6 +281,23 @@ class Database:
             query += f" LIMIT {limit}"
         rows = self.conn.execute(query).fetchall()
         return [row[0] for row in rows]
+
+    # -- Context extraction --
+
+    def get_prs_needing_context_extraction(self, limit: int | None = None) -> list[int]:
+        """Get PRs that have been assembled but not yet had contexts extracted."""
+        query = """
+            SELECT pr_number FROM pr_status
+            WHERE qualifies = 1
+              AND assembled_at IS NOT NULL
+              AND contexts_extracted_at IS NULL
+              AND error_count < 3
+            ORDER BY pr_number
+        """
+        if limit is not None:
+            query += f" LIMIT {limit}"
+        rows = self.conn.execute(query).fetchall()
+        return [int(row[0]) for row in rows]
 
     # -- Summarization + Assembly --
 

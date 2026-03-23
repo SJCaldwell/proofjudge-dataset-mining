@@ -113,6 +113,16 @@ async def fetch_pr_files(
     ]
 
 
+async def fetch_commit_parents(
+    client: GitHubClient, owner: str, repo: str, sha: str
+) -> list[str]:
+    """Fetch the parent commit SHAs for a given commit."""
+    response = await client.rest_get(f"/repos/{owner}/{repo}/commits/{sha}")
+    data: dict[str, Any] = response.json()
+    parents: list[dict[str, Any]] = data.get("parents", [])
+    return [str(p["sha"]) for p in parents]
+
+
 async def fetch_file_content(
     client: GitHubClient, owner: str, repo: str, path: str, ref: str
 ) -> str | None:

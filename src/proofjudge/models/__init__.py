@@ -7,6 +7,7 @@ from proofjudge.models.comments import (
     PRExtraction,
     ReviewComment,
 )
+from proofjudge.models.context import FileSnapshot, PRContext
 from proofjudge.models.pr import (
     BorsMergeStatus,
     DiscoverySource,
@@ -30,10 +31,12 @@ __all__ = [
     "CommitInfo",
     "DiscoverySource",
     "FeedbackCategory",
+    "FileSnapshot",
     "FormalReview",
     "HuggingFaceRow",
     "IssueComment",
     "PRCandidate",
+    "PRContext",
     "PRExtraction",
     "PRParsingResult",
     "PRFile",

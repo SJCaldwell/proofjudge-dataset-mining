@@ -193,6 +193,31 @@ def assemble(
     status()
 
 
+@app.command(name="extract-contexts")
+def extract_contexts(
+    limit: int | None = typer.Option(None, help="Max PRs to extract contexts for"),
+    concurrency: int = typer.Option(3, help="Concurrent extraction workers"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Phase 7: Extract full file contexts and base commit for dataset PRs."""
+    _setup_logging(verbose)
+    settings = _get_settings()
+
+    async def _run() -> None:
+        from proofjudge.pipeline.context_extraction import run_context_extraction
+
+        db = Database(settings.db_path)
+        async with GitHubClient(settings.github_token) as client:
+            count = await run_context_extraction(
+                client, db, settings, limit=limit, concurrency=concurrency
+            )
+            console.print(f"Extracted contexts for {count} PRs.")
+        db.close()
+
+    asyncio.run(_run())
+    status()
+
+
 @app.command()
 def status(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -215,6 +240,7 @@ def status(
     table.add_row("Parsed", str(counts["parsed"]))
     table.add_row("Summarized", str(counts["summarized"]))
     table.add_row("Assembled", str(counts["assembled"]))
+    table.add_row("Contexts Extracted", str(counts["contexts_extracted"]))
     table.add_row("Failed (3+ errors)", str(counts["failed"]))
 
     console.print(table)

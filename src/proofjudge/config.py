@@ -61,6 +61,10 @@ class Settings(BaseSettings):
         return self.data_dir / "summarization"
 
     @property
+    def contexts_dir(self) -> Path:
+        return self.data_dir / "contexts"
+
+    @property
     def dataset_dir(self) -> Path:
         return self.data_dir / "dataset"
 

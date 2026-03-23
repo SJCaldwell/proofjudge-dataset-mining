@@ -132,6 +132,11 @@ class HuggingFaceRow(BaseModel):
     line_count_delta: int
     signature_changed: bool
 
+    # Git SHAs for reproducibility
+    base_commit_sha: str = ""
+    first_commit_sha: str = ""
+    last_commit_sha: str = ""
+
     # Provenance
     dataset_version: str
     extraction_date: str

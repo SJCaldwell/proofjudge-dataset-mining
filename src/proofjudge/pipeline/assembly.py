@@ -12,6 +12,7 @@ from pathlib import Path
 
 from proofjudge.config import Settings
 from proofjudge.models.comments import PRExtraction
+from proofjudge.models.context import PRContext
 from proofjudge.models.pr import BORS_TITLE_PREFIX, PRMetadata
 from proofjudge.models.proof import ProofPair, PRParsingResult
 from proofjudge.models.triplet import (
@@ -45,6 +46,10 @@ def triplet_to_hf_row(
     summarization: PairSummarization,
     metadata: PRMetadata,
     dataset_version: str,
+    *,
+    base_commit_sha: str = "",
+    first_commit_sha: str = "",
+    last_commit_sha: str = "",
 ) -> HuggingFaceRow:
     """Convert a proof pair + summarization into a flat HuggingFace row."""
     title = metadata.title
@@ -80,6 +85,9 @@ def triplet_to_hf_row(
         final_line_count=pair.final_line_count,
         line_count_delta=pair.line_count_delta,
         signature_changed=pair.signature_changed,
+        base_commit_sha=base_commit_sha,
+        first_commit_sha=first_commit_sha,
+        last_commit_sha=last_commit_sha,
         dataset_version=dataset_version,
         extraction_date=datetime.now(UTC).strftime("%Y-%m-%d"),
     )
@@ -109,10 +117,17 @@ def assemble_pr(
         logger.warning("No parsing data for PR #%d", pr_number)
         return []
 
-    # Load extraction for reviewer info
+    # Load extraction for reviewer info + SHAs
     extraction_path = settings.extraction_dir / f"pr_{pr_number}.json"
     extraction = read_json_file(extraction_path, PRExtraction)
     reviewers = extraction.reviewer_usernames if extraction else []
+    first_sha = extraction.first_commit_sha if extraction else ""
+    last_sha = extraction.last_commit_sha if extraction else ""
+
+    # Load context for base commit SHA (if available)
+    context_path = settings.contexts_dir / f"pr_{pr_number}.json"
+    context = read_json_file(context_path, PRContext)
+    base_sha = context.base_commit_sha if context else ""
 
     rows: list[HuggingFaceRow] = []
     for pair_summ in summ_result.pair_results:
@@ -128,7 +143,15 @@ def assemble_pr(
             )
             continue
 
-        row = triplet_to_hf_row(pair, pair_summ, metadata, dataset_version)
+        row = triplet_to_hf_row(
+            pair,
+            pair_summ,
+            metadata,
+            dataset_version,
+            base_commit_sha=base_sha,
+            first_commit_sha=first_sha,
+            last_commit_sha=last_sha,
+        )
         # Fill in reviewers from extraction
         row = row.model_copy(update={"reviewers": reviewers})
         rows.append(row)
