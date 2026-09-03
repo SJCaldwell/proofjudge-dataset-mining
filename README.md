@@ -1,13 +1,17 @@
 # ProofJudge dataset mining
 
+[![arXiv](https://img.shields.io/badge/arXiv-2608.20432-b31b1b.svg)](https://arxiv.org/abs/2608.20432)
+[![Hugging Face Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-yellow)](https://huggingface.co/datasets/SJCaldwell/proofjudge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+The data-mining half of [ProofJudge](https://github.com/SJCaldwell/ProofJudge).
 Mines proof-quality pairs from [mathlib4](https://github.com/leanprover-community/mathlib4)
 pull requests. Each pair is one declaration as it looked when the PR was opened
 and as it looked when Mathlib merged it. The pairs are used to test whether an
 LLM judge can tell which version is better.
 
-The judge harness that consumes these sets is at
-https://github.com/SJCaldwell/ProofJudge, and the published sets are on
-HuggingFace at [`SJCaldwell/proofjudge`](https://huggingface.co/datasets/SJCaldwell/proofjudge).
+- **Judge harness and paper:** [SJCaldwell/ProofJudge](https://github.com/SJCaldwell/ProofJudge)
+- **Published dataset:** [`SJCaldwell/proofjudge`](https://huggingface.co/datasets/SJCaldwell/proofjudge) on Hugging Face
 
 ## Layout
 
@@ -64,3 +68,23 @@ led to it. The path-filter bug itself is fixed in `pipeline/parsing.py` as of
   can't turn them into ground truth.
 - `data/` is gitignored. The corpus and eval artifacts are rebuilt from the
   pipeline rather than committed. The published sets are on HuggingFace.
+
+## Citation
+
+If you use this pipeline or the dataset in your work, please cite:
+
+```bibtex
+@misc{caldwell2026proofjudgetoolgroundedllmevaluation,
+      title={ProofJudge: Tool-Grounded LLM Evaluation of Formal Proof Quality in Mathlib},
+      author={Shane Caldwell},
+      year={2026},
+      eprint={2608.20432},
+      archivePrefix={arXiv},
+      primaryClass={cs.LO},
+      url={https://arxiv.org/abs/2608.20432},
+}
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).

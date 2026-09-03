@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this pipeline or the dataset in your work, please cite the paper below."
+title: "proofjudge-dataset-mining"
+abstract: "Pipeline for mining proof-quality pairs from Mathlib (Lean 4) pull requests and building a blind-verified evaluation set for ProofJudge."
+type: software
+authors:
+  - family-names: Caldwell
+    given-names: Shane
+repository-code: "https://github.com/SJCaldwell/proofjudge-dataset-mining"
+url: "https://arxiv.org/abs/2608.20432"
+license: MIT
+keywords:
+  - Lean 4
+  - Mathlib
+  - formal proofs
+  - LLM-as-judge
+  - dataset
+identifiers:
+  - type: url
+    value: "https://huggingface.co/datasets/SJCaldwell/proofjudge"
+    description: "The ProofJudge evaluation dataset on Hugging Face"
+  - type: url
+    value: "https://github.com/SJCaldwell/ProofJudge"
+    description: "The ProofJudge judge harness"
+preferred-citation:
+  type: article
+  title: "ProofJudge: Tool-Grounded LLM Evaluation of Formal Proof Quality in Mathlib"
+  authors:
+    - family-names: Caldwell
+      given-names: Shane
+  year: 2026
+  journal: "arXiv preprint"
+  identifiers:
+    - type: other
+      value: "arXiv:2608.20432"
+  url: "https://arxiv.org/abs/2608.20432"
