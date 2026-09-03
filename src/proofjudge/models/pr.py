@@ -61,12 +61,27 @@ class PRFile(BaseModel):
 # Paths that indicate infrastructure, not proof code
 INFRA_PATH_PREFIXES = frozenset(
     {
+        # build / CI / repo tooling
         "scripts/",
         ".github/",
         "test/",
         "lakefile",
         "lean-toolchain",
         "lake-manifest",
+        # standalone tools shipped alongside mathlib — not mathematics
+        "Cache/",
+        "LongestPole/",
+        "Shake/",
+        "ImportGraph/",
+        # Lean metaprogramming: linters, tactic implementations, elaborators.
+        # These are real code but they are not proofs, and a proof-quality
+        # rubric scores them very differently (measured: 31.6% aligned /
+        # 52.6% inverted, against 60.6%/24.7% for actual proofs).
+        "Mathlib/Tactic/",
+        "Mathlib/Util/",
+        "Mathlib/Lean/",
+        "Mathlib/Mathport/",
+        "Mathlib/Testing/",
     }
 )
 

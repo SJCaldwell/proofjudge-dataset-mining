@@ -16,6 +16,7 @@ from proofjudge.github.client import GitHubClient
 from proofjudge.github.rest import fetch_file_content
 from proofjudge.lean.parser import extract_proof_blocks
 from proofjudge.models.comments import PRExtraction
+from proofjudge.models.pr import INFRA_PATH_PREFIXES
 from proofjudge.models.proof import ProofBlock, ProofPair, PRParsingResult
 from proofjudge.storage.database import Database
 from proofjudge.storage.jsonl import read_json_file, write_json_file
@@ -161,9 +162,19 @@ async def parse_single_pr(
 
     all_pairs: list[ProofPair] = []
 
-    # Process each .lean file changed in the PR
+    # Process each .lean file changed in the PR.
+    #
+    # The infra filter must be applied HERE, not only in `is_proof_touching`.
+    # That property is a PR-level any() check — "does this PR touch at least one
+    # non-infra .lean file" — so a PR touching both Mathlib/Algebra/Foo.lean and
+    # scripts/lint-style.lean qualifies on the former and, without this filter,
+    # contributes declarations from BOTH. That leak put 97 non-mathematical rows
+    # (linters, CLI tools, tactic implementations) into a 4,196-row dataset.
     lean_files = [
-        f for f in extraction.files_changed if f.path.endswith(".lean")
+        f
+        for f in extraction.files_changed
+        if f.path.endswith(".lean")
+        and not any(f.path.startswith(prefix) for prefix in INFRA_PATH_PREFIXES)
     ]
 
     for file_info in lean_files:

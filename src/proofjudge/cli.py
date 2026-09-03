@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from proofjudge.config import Settings
+from proofjudge.evalset.cli import app as evalset_app
 from proofjudge.github.client import GitHubClient
 from proofjudge.storage.database import Database
 
@@ -316,6 +317,9 @@ def sample(
 
     asyncio.run(_run())
     status()
+
+
+app.add_typer(evalset_app, name="evalset", help="Build and verify a held-out eval set.")
 
 
 if __name__ == "__main__":
