@@ -41,6 +41,47 @@ workflow and not a script.
 Every phase is resumable — state lives in `data/proofjudge.db`, so an interrupted
 run picks up where it stopped. Re-running a completed phase is a no-op.
 
+### Two different filters decide what survives — don't conflate them
+
+This trips people up, so it is worth stating plainly. A pair has to pass **both**:
+
+**1. A mechanical difference threshold** (`pipeline/parsing.py`, no LLM, free).
+Declarations are matched by name across the PR's first and last commit, and a
+pair is kept only if the proof body actually changed enough to be interesting:
+
+    _MIN_CHANGED_TOKENS    = 3      # bag-of-tokens diff: added + removed
+    _MIN_CHANGE_PROPORTION = 0.05   # relative to the *shorter* proof
+
+The proportional test is what stops a 116-line proof with one renamed tactic
+from counting as a rewrite. There is also a hardcoded filter for the mechanical
+`refine'` → `refine` migration, which is a mass rename rather than a change of
+approach.
+
+**2. An LLM quality classification** (`pipeline/summarization.py`, ~$200).
+Every surviving pair is shown to Claude — the two proofs, the declaration, a
+`signature_changed` flag, and the relevant reviewer comments — and classified:
+
+    HIGH_VALUE   the proof's approach genuinely improved
+    LOW_VALUE    trivial, mechanical or cosmetic
+    CONTEXTUAL   the change was forced by something outside the proof —
+                 a renamed lemma, a refactored definition, a changed statement
+
+Only HIGH_VALUE reaches the dataset. This is a judgement about *quality*, not
+about *magnitude*: a large diff that only adapts to a renamed lemma is
+CONTEXTUAL, and a small diff that replaces a manual construction with the right
+library lemma is HIGH_VALUE.
+
+The prompt lives in `pipeline/prompts.py` and carries five worked examples. If
+you retarget this at another library, that prompt is the first thing to rewrite —
+its examples are mathlib-specific and it is what defines "quality" for your
+whole corpus.
+
+One caveat inherited from this design: the classifier sees the **review
+comments**, so a pair can be labelled HIGH_VALUE on the strength of a reviewer's
+remark even when the improvement is not visible in the proof text. That is
+exactly the gap stage 2's blind adjudication measures, and on same-or-longer
+pairs it turned out to be large.
+
 ### Things worth knowing before you start
 
 **mathlib4 merges via Bors, not GitHub.** Merged PRs show up as *closed*, with
