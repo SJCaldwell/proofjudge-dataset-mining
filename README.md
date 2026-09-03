@@ -1,22 +1,24 @@
-# ProofJudge — dataset mining
+# ProofJudge dataset mining
 
 Mines proof-quality pairs from [mathlib4](https://github.com/leanprover-community/mathlib4)
-pull requests: the state a declaration was in when a PR opened, and the state
-Mathlib merged. Used to evaluate whether an LLM judge can tell which is better.
+pull requests. Each pair is one declaration as it looked when the PR was opened
+and as it looked when Mathlib merged it. The pairs are used to test whether an
+LLM judge can tell which version is better.
 
-Companion harness (runs judges against these sets):
-https://github.com/SJCaldwell/ProofJudge
+The judge harness that consumes these sets is at
+https://github.com/SJCaldwell/ProofJudge, and the published sets are on
+HuggingFace at [`SJCaldwell/proofjudge`](https://huggingface.co/datasets/SJCaldwell/proofjudge).
 
 ## Layout
 
     src/proofjudge/
-      pipeline/     stage 1 — mine a corpus of proof pairs from PRs
-      evalset/      stage 2 — turn that corpus into a verified eval set
+      pipeline/     stage 1: mine a corpus of proof pairs from PRs
+      evalset/      stage 2: turn that corpus into a verified eval set
       lean/         Lean 4 declaration parser
       github/       GraphQL + REST clients, rate limiting, retries
       models/       pydantic schemas
     workflows/      Claude Code Workflow scripts (blind adjudication)
-    docs/           REPRODUCING.md — start here
+    docs/           REPRODUCING.md, which is the place to start
     data/           all outputs (gitignored)
 
 ## Quick start
@@ -25,38 +27,40 @@ https://github.com/SJCaldwell/ProofJudge
     cp .env.example .env    # GITHUB_TOKEN + ANTHROPIC_API_KEY
     proofjudge --help
 
-Then follow [docs/REPRODUCING.md](docs/REPRODUCING.md), which walks both stages
-end to end and flags the traps that cost us time.
+Then follow [docs/REPRODUCING.md](docs/REPRODUCING.md). It walks through both
+stages end to end and points out the things that cost us time.
 
 ## Why there are two stages
 
-Stage 1 produces a large corpus cheaply. Stage 2 exists because we learned the
-hard way that those are different artifacts:
+Stage 1 mines a corpus. Stage 2 turns part of that corpus into an eval set with
+checked labels. They started out as one thing, and we split them after finding
+that a corpus we could mine cheaply was not a set we could trust:
 
-- **A corpus you can mine is not an eval set you can trust.** Selecting rows on
-  metadata alone — length ratios, category tags, a quality flag — produced a set
-  where blind readers could not confirm the label on 27% of rows. The same
-  protocol on a hand-curated set failed on 3%.
-- **The failures concentrate.** One stratum (proofs that did not get shorter)
-  accounted for almost all of it, at 43% label support against 89–93% elsewhere.
-  Those changes are near-identical textually, and near-identical changes are
-  frequently lateral rather than improvements.
-- **Some rows were not proofs at all.** Linters, CLI tools and tactic
-  implementations leaked in through a path-filter bug and scored very differently
-  from mathematics (31.6% aligned, 52.6% inverted, against 60.6%/24.7%).
+- Picking eval rows by metadata alone (length ratios, category tags, the
+  quality flag) gave a set where blind readers couldn't confirm the label on 27%
+  of rows. The same check on a hand-picked set failed on 3%.
+- Nearly all of that came from one stratum: proofs that didn't get shorter.
+  Label support there was 43%, against 89–93% everywhere else. Those changes
+  tend to stay textually close to the original, and a change that stays close is
+  often a sideways move rather than an improvement.
+- Some rows weren't proofs. Linters, CLI tools and tactic implementations got in
+  through a path-filter bug, and a proof-quality rubric scores them badly (31.6%
+  aligned, 52.6% inverted, versus 60.6% and 24.7% for actual mathematics).
 
-Stage 2 filters all three at selection time and then verifies what survives by
-blind adjudication. See `src/proofjudge/evalset/select.py` — every exclusion is
-commented with the measurement that motivated it.
+Stage 2 applies all three exclusions when it selects rows, then checks the
+survivors by blind adjudication. The exclusions live in
+`src/proofjudge/evalset/select.py`, each with a comment saying which measurement
+led to it. The path-filter bug itself is fixed in `pipeline/parsing.py` as of
+`0987e59`.
 
 ## Known limitations
 
-- **Only merged PRs are sampled.** `qualifies_for_extraction` requires a merge,
-  so submissions rejected outright never enter the corpus. One consequence: the
-  corpus is 100% human-authored, and cannot be used to study AI-generated proof
-  detection — machine-written submissions are the ones closed unmerged.
-- **Labels come from an LLM pass** over the diff plus review comments, so they
-  encode that model's judgement, not a reviewer's. Blind adjudication in stage 2
-  checks them but cannot establish ground truth.
-- **`data/` is gitignored.** Corpus and eval artifacts are reproducible from the
-  pipeline, not committed. Published sets live on HuggingFace.
+- Only merged PRs are sampled. `qualifies_for_extraction` requires a merge, so
+  anything rejected outright never enters the corpus. That also means the corpus
+  is entirely human-authored and can't be used to study detection of AI-written
+  proofs, since those are the submissions that get closed without merging.
+- Labels come from an LLM reading the diff and the review comments. They
+  reflect that model's judgement, not a reviewer's. Stage 2 checks them but
+  can't turn them into ground truth.
+- `data/` is gitignored. The corpus and eval artifacts are rebuilt from the
+  pipeline rather than committed. The published sets are on HuggingFace.
