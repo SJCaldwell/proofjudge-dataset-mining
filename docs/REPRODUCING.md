@@ -82,6 +82,32 @@ remark even when the improvement is not visible in the proof text. That is
 exactly the gap stage 2's blind adjudication measures, and on same-or-longer
 pairs it turned out to be large.
 
+### The reference dataset
+
+You do not have to rebuild ours to compare against it. It is public, and no
+token is needed:
+
+    https://huggingface.co/datasets/SJCaldwell/proofjudge
+
+    curl -sL -o test_eval.jsonl \
+      https://huggingface.co/datasets/SJCaldwell/proofjudge/resolve/v0.2.0/test/eval.jsonl
+
+`v0.1.0` is the 123-declaration `dev` split; `v0.2.0` adds the 218-declaration
+`test` split. The judge harness pulls these automatically on first run, so you
+only need the URL if you want to inspect or diff them by hand.
+
+One trap when comparing numbers. The dataset card reports code-similarity over
+the comment-stripped **whole declaration**, while `evalset/lean_text.py` computes
+it **body-only** — the signature is identical on every pair we keep, so including
+it inflates the figure. Both are defensible; they are just not the same number:
+
+    split   whole-declaration   body-only
+    dev            0.391          0.256
+    test           0.590          0.477
+
+Say which one you mean. A "median similarity 0.59" that silently becomes 0.48
+looks like a regression and is not one.
+
 ### Things worth knowing before you start
 
 **mathlib4 merges via Bors, not GitHub.** Merged PRs show up as *closed*, with
